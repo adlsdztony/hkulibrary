@@ -35,7 +35,7 @@ fn get_facility_by_id(id: i32) -> Option<&'static Facility> {
     }
     None
 }
-
+/// Task struct for booking
 pub struct Task {
     date: String,
     time: String,
@@ -112,7 +112,7 @@ impl From<(&str, &str, &str)> for Task {
     }
 }
 
-
+/// a wrapper of authku::Client
 pub struct LibClient {
     client: Client,
 }
@@ -124,6 +124,7 @@ impl LibClient {
         }
     }
 
+    /// login to lib.hku.hk
     pub async fn login(
         &self,
         uid: &str,
@@ -133,6 +134,7 @@ impl LibClient {
         Ok(self)
     }
 
+    /// book a facility
     pub async fn book(&self, task: &Task) -> Result<&Self, Box<dyn std::error::Error>> {
         let url = task.make_book_url();
         let res = self.get(&url).send().await?;
