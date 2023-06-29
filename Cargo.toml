@@ -1,0 +1,21 @@
+[package]
+name = "hkulibrary"
+version = "0.1.0"
+edition = "2021"
+authors = ["adlsdztony <zzl0712@connect.hku.hk>"]
+license = "MIT OR Apache-2.0"
+description = "a user-friendly client for HKU library"
+readme = "README.md"
+homepage = "https://github.com/adlsdztony/hkulibrary"
+repository = "https://github.com/adlsdztony/hkulibrary"
+keywords = ["library", "hku", "booking"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+authku = "0.1"
+regex = "1.8.4"
+
+
+[dev-dependencies]
+tokio-test = "0.4"
