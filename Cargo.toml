@@ -14,7 +14,7 @@ keywords = ["library", "hku", "booking"]
 
 [dependencies]
 authku = "0.1"
-regex = "1.8.4"
+regex = "^1.8.4"
 
 
 [dev-dependencies]
