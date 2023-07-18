@@ -1,8 +1,9 @@
+
 use crate::facilities::get_facility_by_id;
 
 
 /// Task struct for booking
-pub struct Task {
+pub struct BookTask {
     date: String,
     time: String,
     session: String,
@@ -12,7 +13,7 @@ pub struct Task {
     facility_id: String,
 }
 
-impl Task {
+impl BookTask {
     pub fn new(date: &str, time: &str, facility_id: &str) -> Self {
         let facility_id: i32 = facility_id.parse().unwrap();
         let facility = get_facility_by_id(facility_id)
@@ -27,7 +28,7 @@ impl Task {
             }
         }
     
-        Task {
+        BookTask {
             date: date.to_string(),
             time: time.to_string(),
             session: session.to_string(),
@@ -47,7 +48,7 @@ impl Task {
         facility_type: &str,
         facility_id: &str,
     ) -> Self {
-        Task {
+        BookTask {
             date: date.to_string(),
             time: time.to_string(),
             session: session.to_string(),
@@ -98,8 +99,29 @@ impl Task {
     }
 }
 
-impl From<(&str, &str, &str)> for Task {
+impl From<(&str, &str, &str)> for BookTask {
     fn from((date, time, facility_id): (&str, &str, &str)) -> Self {
-        Task::new(date, time, facility_id)
+        BookTask::new(date, time, facility_id)
+    }
+}
+
+
+/// Task struct for fetching
+#[derive(Debug)]
+pub struct FetchTask {
+    date: String,
+    time: String,
+    facility_name: String,
+    status: String,
+}
+
+impl FetchTask {
+    pub fn new(date: String, time: String, facility_name: String, status: String) -> Self {
+        FetchTask {
+            date,
+            time,
+            facility_name,
+            status,
+        }
     }
 }
