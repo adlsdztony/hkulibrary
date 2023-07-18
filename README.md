@@ -48,4 +48,4 @@ async fn book() -> Result<(), Box<dyn std::error::Error>> {
 - [ ] Functions
   - [x] Book
   - [ ] Cancel
-  - [ ] Get Booked
+  - [x] Get Booked

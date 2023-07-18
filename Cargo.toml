@@ -1,6 +1,6 @@
 [package]
 name = "hkulibrary"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["adlsdztony <zzl0712@connect.hku.hk>"]
 license = "MIT OR Apache-2.0"
@@ -13,8 +13,9 @@ keywords = ["library", "hku", "booking"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-authku = "0.1"
-regex = "1.8.4"
+authku = "0.1.4"
+regex = "^1.8.4"
+soup = "0.5.1"
 
 
 [dev-dependencies]

@@ -1,116 +1,12 @@
 #![allow(dead_code)]
 
+mod facilities;
+mod task;
+
 use authku::Client;
+use soup::prelude::*;
 use std::ops::Deref;
-
-pub struct Facility {
-    library: i32,
-    floor: i32,
-    facility_type: i32,
-    init_id: i32,
-    final_id: i32,
-    session_list: [&'static str; 20],
-}
-
-const DISCUSSION_ROOM: Facility = Facility {
-    library: 3,
-    floor: 3,
-    facility_type: 21,
-    init_id: 129,
-    final_id: 134,
-    session_list: [
-        "08300930", "09301030", "10301130", "11301230", "12301330", "13301430", "14301530",
-        "15301630", "16301730", "17301830", "18301930", "19302030", "20302200", "00000000",
-        "00000000", "00000000", "00000000", "00000000", "00000000", "00000000",
-    ],
-};
-
-const FCILITIES: [Facility; 1] = [DISCUSSION_ROOM];
-
-fn get_facility_by_id(id: i32) -> Option<&'static Facility> {
-    for facility in FCILITIES.iter() {
-        if id >= facility.init_id && id <= facility.final_id {
-            return Some(facility);
-        }
-    }
-    None
-}
-/// Task struct for booking
-pub struct Task {
-    date: String,
-    time: String,
-    session: String,
-    library: String,
-    floor: String,
-    facility_type: String,
-    facility_id: String,
-}
-
-impl Task {
-
-    pub fn new(date: &str, time: &str, facility_id: &str) -> Self {
-        let facility_id: i32 = facility_id.parse().unwrap();
-        let facility = get_facility_by_id(facility_id)
-            .unwrap_or_else(|| panic!("Invalid facility id: {} \nNot support id", facility_id));
-    
-        // get the idex of time in session_list
-        let mut session = 0;
-        for (i, t) in facility.session_list.iter().enumerate() {
-            if t == &time {
-                session = i;
-                break;
-            }
-        }
-    
-        Task {
-            date: date.to_string(),
-            time: time.to_string(),
-            session: session.to_string(),
-            library: facility.library.to_string(),
-            floor: facility.floor.to_string(),
-            facility_type: facility.facility_type.to_string(),
-            facility_id: facility_id.to_string(),
-        }
-    }
-
-    pub fn default(
-        date: &str,
-        time: &str,
-        session: &str,
-        library: &str,
-        floor: &str,
-        facility_type: &str,
-        facility_id: &str,
-    ) -> Self {
-        Task {
-            date: date.to_string(),
-            time: time.to_string(),
-            session: session.to_string(),
-            library: library.to_string(),
-            floor: floor.to_string(),
-            facility_type: facility_type.to_string(),
-            facility_id: facility_id.to_string(),
-        }
-    }
-
-
-    pub fn make_book_url(&self) -> String {
-        let url = format!("https://booking.lib.hku.hk/Secure/NewBooking.aspx?library={}&ftype={}&facility={}&date={}&session={}",
-            self.library,
-            self.facility_type,
-            self.facility_id,
-            self.date.replace("-", ""),
-            self.session,
-        );
-        url
-    }
-}
-
-impl From<(&str, &str, &str)> for Task {
-    fn from((date, time, facility_id): (&str, &str, &str)) -> Self {
-        Task::new(date, time, facility_id)
-    }
-}
+use task::{BookTask, FetchTask};
 
 /// a wrapper of authku::Client
 pub struct LibClient {
@@ -135,7 +31,7 @@ impl LibClient {
     }
 
     /// book a facility
-    pub async fn book(&self, task: &Task) -> Result<&Self, Box<dyn std::error::Error>> {
+    pub async fn book(&self, task: &BookTask) -> Result<&Self, Box<dyn std::error::Error>> {
         let url = task.make_book_url();
         let res = self.get(&url).send().await?;
 
@@ -173,7 +69,7 @@ impl LibClient {
                 .unwrap()
                 .as_str();
 
-        let session_key = format!("ctl00$main$listSession${}", &task.session);
+        let session_key = format!("ctl00$main$listSession${}", task.get_session());
 
         let mut data: [(&str, &str); 22] = [
             ("__VIEWSTATE", viewstate),
@@ -187,12 +83,12 @@ impl LibClient {
             ("__EVENTTARGET", ""),
             ("__EVENTARGUMENT", ""),
             ("__LASTFOCUS", ""),
-            ("ctl00$main$ddlLibrary", &task.library),
-            ("ctl00$main$ddlFloor", &task.floor),
-            ("ctl00$main$ddlType", &task.facility_type),
-            ("ctl00$main$ddlFacility", &task.facility_id),
-            ("ctl00$main$ddlDate", &task.date),
-            (&session_key, &task.time),
+            ("ctl00$main$ddlLibrary", task.get_library()),
+            ("ctl00$main$ddlFloor", task.get_floor()),
+            ("ctl00$main$ddlType", task.get_facility_type()),
+            ("ctl00$main$ddlFacility", task.get_facility_id()),
+            ("ctl00$main$ddlDate", task.get_date()),
+            (&session_key, task.get_time()),
             ("ctl00$main$txtUserDescription", ""),
             ("ctl00$main$hBtnSubmit", ""),
             ("ctl00$main$hBtnEmail", ""),
@@ -226,6 +122,51 @@ impl LibClient {
             )))
         }
     }
+
+    async fn fetch_state(&self) -> Result<Vec<FetchTask>, Box<dyn std::error::Error>> {
+        let url = "https://booking.lib.hku.hk/Secure/MyBookingRecord.aspx";
+        let res = self.get(url).send().await?;
+        let text = res.text().await?;
+        let soup = Soup::new(&text);
+        let table = soup
+            .attr("id", "main_gvRecord")
+            .find()
+            .expect("table not found");
+        let mut tasks: Vec<FetchTask> = vec![];
+        for row in table.tag("tr").find_all().skip(1) {
+            // check if the row is empty
+            if row.tag("td").find_all().count() <= 3 {
+                continue;
+            }
+
+            let mut iter = row.tag("td").find_all();
+            iter.next();
+            let date_and_time = iter
+                .next()
+                .unwrap()
+                .text();
+            let date_and_time = date_and_time.split_whitespace()
+                .into_iter()
+                .collect::<Vec<&str>>();
+            let date_and_time2 = iter
+                .next()
+                .unwrap()
+                .text();
+            let date_and_time2 = date_and_time2.split_whitespace()
+                .into_iter()
+                .collect::<Vec<&str>>();
+            let date = date_and_time[0].to_string();
+            let time = date_and_time[2].to_string() + " - " + date_and_time2[2];
+            iter.next();
+            iter.next();
+            let facility_name = iter.next().unwrap().text();
+            let status = iter.next().unwrap().text();
+            
+            tasks.push(FetchTask::new(date, time, facility_name, status));
+        }
+
+        Ok(tasks)
+    }
 }
 
 impl Deref for LibClient {
@@ -236,51 +177,67 @@ impl Deref for LibClient {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+    macro_rules! aw {
+        ($e:expr) => {
+            tokio_test::block_on($e)
+        };
+    }
 
-//     macro_rules! aw {
-//         ($e:expr) => {
-//             tokio_test::block_on($e)
-//         };
-//     }
+    #[test]
+    fn make_url() {
+        let task = BookTask::default("2021-09-30", "1", "1", "1", "1", "1", "1");
+        let url = task.make_book_url();
+        assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=1&ftype=1&facility=1&date=20210930&session=1");
+    }
 
-//     #[test]
-//     fn make_url() {
-//         let task = Task::default("2021-09-30", "1", "1", "1", "1", "1", "1");
-//         let url = task.make_book_url();
-//         assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=1&ftype=1&facility=1&date=20210930&session=1");
-//     }
+    #[test]
+    fn task_mini() {
+        let task = BookTask::new("2021-09-30", "08300930", "129");
+        let url = task.make_book_url();
+        assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=3&ftype=21&facility=129&date=20210930&session=0");
 
-//     #[test]
-//     fn task_mini() {
-//         let task = Task::new("2021-09-30", "08300930", "129");
-//         let url = task.make_book_url();
-//         assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=3&ftype=21&facility=129&date=20210930&session=0");
+        let task = BookTask::new("2021-09-30", "09301030", "130");
+        assert_eq!(task.get_facility_type(), "21");
+        assert_eq!(task.get_facility_id(), "130");
+        assert_eq!(task.get_session(), "1");
+    }
 
-//         let task = Task::new("2021-09-30", "09301030", "130");
-//         assert_eq!(task.facility_type, "21");
-//         assert_eq!(task.facility_id, "130");
-//         assert_eq!(task.session, "1");
-//     }
+    #[test]
+    fn task_from() {
+        let task: BookTask = ("2021-09-30", "08300930", "129").into();
+        let url = task.make_book_url();
+        assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=3&ftype=21&facility=129&date=20210930&session=0");
+    }
 
-//     #[test]
-//     fn task_from() {
-//         let task: Task = ("2021-09-30", "08300930", "129").into();
-//         let url = task.make_book_url();
-//         assert_eq!(url, "https://booking.lib.hku.hk/Secure/NewBooking.aspx?library=3&ftype=21&facility=129&date=20210930&session=0");
-//     }
+    #[test]
+    fn test_readme() {
+        // this test will failed
+        let uid = std::env::var("HKU_UID").unwrap_or_else(|_e| panic!("HKU_UID not set"));
+        let pwd = std::env::var("HKU_PWD").unwrap_or_else(|_e| panic!("HKU_PWD not set"));
+        let client = LibClient::new();
+        aw!(
+            aw!(
+                client.login(&uid, &pwd)
+            ).unwrap()
+            .book(&("2023-06-29","08300930","129").into())
+        ).unwrap();
+    }
 
-//     #[test]
-//     fn test_readme() {
-//         let client = LibClient::new();
-//         aw!(
-//             aw!(
-//                 client.login("username", "password")
-//             ).unwrap()
-//             .book(&("2023-06-29","08300930","129").into())
-//         ).unwrap();
-//     }
-// }
+    #[test]
+    fn test_fetch() {
+        let uid = std::env::var("HKU_UID").unwrap_or_else(|_e| panic!("HKU_UID not set"));
+        let pwd = std::env::var("HKU_PWD").unwrap_or_else(|_e| panic!("HKU_PWD not set"));
+        let client = LibClient::new();
+        let tasks = aw!(
+            aw!(
+                client.login(&uid, &pwd)
+            ).unwrap()
+            .fetch_state()
+        ).unwrap();
+        println!("{:?}", tasks);
+    }
+}
