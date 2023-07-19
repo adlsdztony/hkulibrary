@@ -1,4 +1,3 @@
-
 pub struct Facility {
     pub library: i32,
     pub floor: i32,

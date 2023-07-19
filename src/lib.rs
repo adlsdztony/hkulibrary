@@ -141,18 +141,14 @@ impl LibClient {
 
             let mut iter = row.tag("td").find_all();
             iter.next();
-            let date_and_time = iter
-                .next()
-                .unwrap()
-                .text();
-            let date_and_time = date_and_time.split_whitespace()
+            let date_and_time = iter.next().unwrap().text();
+            let date_and_time = date_and_time
+                .split_whitespace()
                 .into_iter()
                 .collect::<Vec<&str>>();
-            let date_and_time2 = iter
-                .next()
-                .unwrap()
-                .text();
-            let date_and_time2 = date_and_time2.split_whitespace()
+            let date_and_time2 = iter.next().unwrap().text();
+            let date_and_time2 = date_and_time2
+                .split_whitespace()
                 .into_iter()
                 .collect::<Vec<&str>>();
             let date = date_and_time[0].to_string();
@@ -161,7 +157,7 @@ impl LibClient {
             iter.next();
             let facility_name = iter.next().unwrap().text();
             let status = iter.next().unwrap().text();
-            
+
             tasks.push(FetchTask::new(date, time, facility_name, status));
         }
 
@@ -219,12 +215,10 @@ mod tests {
         let uid = std::env::var("HKU_UID").unwrap_or_else(|_e| panic!("HKU_UID not set"));
         let pwd = std::env::var("HKU_PWD").unwrap_or_else(|_e| panic!("HKU_PWD not set"));
         let client = LibClient::new();
-        aw!(
-            aw!(
-                client.login(&uid, &pwd)
-            ).unwrap()
-            .book(&("2023-06-29","08300930","129").into())
-        ).unwrap();
+        aw!(aw!(client.login(&uid, &pwd))
+            .unwrap()
+            .book(&("2023-06-29", "08300930", "129").into()))
+        .unwrap();
     }
 
     #[test]
@@ -232,12 +226,7 @@ mod tests {
         let uid = std::env::var("HKU_UID").unwrap_or_else(|_e| panic!("HKU_UID not set"));
         let pwd = std::env::var("HKU_PWD").unwrap_or_else(|_e| panic!("HKU_PWD not set"));
         let client = LibClient::new();
-        let tasks = aw!(
-            aw!(
-                client.login(&uid, &pwd)
-            ).unwrap()
-            .fetch_state()
-        ).unwrap();
+        let tasks = aw!(aw!(client.login(&uid, &pwd)).unwrap().fetch_state()).unwrap();
         println!("{:?}", tasks);
     }
 }
